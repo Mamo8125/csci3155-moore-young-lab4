@@ -1,0 +1,4 @@
+## Obj(Map(a -> N(5.0), b -> N(2.0))) : { a: number; b: number }
+## value: Obj(Map(a -> N(5.0), b -> N(2.0)))
+{ a: 5.0,
+  b: 2.0 }
