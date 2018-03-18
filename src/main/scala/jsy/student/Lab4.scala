@@ -5,19 +5,19 @@ import jsy.lab4.Lab4Like
 object Lab4 extends jsy.util.JsyApplication with Lab4Like {
   import jsy.lab4.ast._
   import jsy.lab4.Parser
-  
+
   /*
    * CSCI 3155: Lab 4
-   * <Jonathan Young>
-   * 
-   * Partner: <Matt Moore>
-   * Collaborators: <Zijun Xu>
+   * <Matt Moore>
+   *
+   * Partner: <Jonathan Young>
+   * Collaborators: <Any Collaborators>
    */
 
   /*
    * Fill in the appropriate portions above by replacing things delimited
    * by '<'... '>'.
-   * 
+   *
    * Replace the '???' expression with your code in each function.
    *
    * Do not make other modifications to this template, such as
@@ -32,23 +32,23 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
    * '???' as needed to get something that compiles without error. The '???'
    * is a Scala expression that throws the exception scala.NotImplementedError.
    */
-  
+
   /* Collections and Higher-Order Functions */
-  
+
   /* Lists */
-  
+
   def compressRec[A](l: List[A]): List[A] = l match {
     case Nil | _ :: Nil => l
     case h1 :: (t1 @ (h2 :: _)) => if (h1 == h2) compressRec(t1) else h1 :: compressRec(t1)
   }
-  
+
   def compressFold[A](l: List[A]): List[A] = l.foldRight(Nil: List[A]){
     (h, acc) => acc match {
       case Nil => h :: Nil
       case h1 :: _ => if (h1 == h) acc else h :: acc
     }
   }
-  
+
   def mapFirst[A](l: List[A])(f: A => Option[A]): List[A] = l match {
     case Nil => l
     case h :: t => f(h) match {
@@ -56,7 +56,7 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
       case Some(x) => x :: t
     }
   }
-  
+
   /* Trees */
 
   def foldLeft[A](t: Tree)(z: A)(f: (A, Int) => A): A = {
@@ -98,7 +98,7 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
     case TObj(fields) if (fields exists { case (_, t) => hasFunctionTyp(t) }) => true
     case _ => false
   }
-  
+
   def typeof(env: TEnv, e: Expr): Typ = {
     def err[T](tgot: Typ, e1: Expr): T = throw StaticTypeError(tgot, e1, e)
 
@@ -108,7 +108,7 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
       case B(_) => TBool
       case Undefined => TUndefined
       case S(_) => TString
-      case Var(x) => lookup[Typ](env, x)
+      case Var(x) => env(x)
       case Decl(mode, x, e1, e2) => typeof(extend(env, x, typeof(env, e1)), e2)
       case Unary(Neg, e1) => typeof(env, e1) match {
         case TNumber => TNumber
@@ -121,7 +121,7 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
       case Binary(Plus, e1, e2) => (typeof(env, e1), typeof(env, e2)) match {
         case (TString, TString) => TString
         case (TNumber, TNumber) => TNumber
-        case (TString | TNumber, tgot) => err(tgot, e2)
+        case (a, tgot) => if (a != tgot) err(tgot, e2) else tgot
         case (tgot, _) => err(tgot, e1)
       }
       case Binary(Minus|Times|Div, e1, e2) => (typeof(env, e1), typeof(env, e2)) match {
@@ -130,13 +130,10 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
         case (tgot, _) => err(tgot, e1)
       }
       case Binary(Eq|Ne, e1, e2) => (typeof(env, e1), typeof(env, e2)) match {
-        case (TFunction(_, _), _) | (_, TFunction(_, _)) => {
-          if(hasFunctionTyp(typeof(env,e1))) err(typeof(env,e1),e) else err(typeof(env,e2),e)
-        }
-        case (t1, t2) if t1 == t2 => t1
-        case (t1, t2) if t1 != t2 => err(t2, e2)
+        case (t1, t2) if t1 == t2 => TBool
         case (tgot, _) if hasFunctionTyp(tgot) => err(tgot, e1)
         case (_ , tgot) if hasFunctionTyp(tgot)=> err(tgot, e2)
+        case (t1, t2) if t1 != t2 => err(t2, e2)
         case _ => TBool
       }
       case Binary(Lt|Le|Gt|Ge, e1, e2) => (typeof(env, e1), typeof(env, e2)) match {
@@ -199,8 +196,8 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
         }
     }
   }
-  
-  
+
+
   /* Small-Step Interpreter */
 
   /*
@@ -358,13 +355,15 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
       case Binary(ineq @ (Lt|Le|Gt|Ge), S(s1), S(s2)) => B(inequalityVal(ineq,  S(s1),S(s2)))
       case Binary(eq @ (Eq|Ne), v1, v2) if isValue(v1) && isValue(v2) => eq match {
         case Eq => B(v1 == v2)
-        case Ne => B( v1 != v2)
+        case Ne => B(v1 != v2)
       }
 
       case Binary(And, B(b1), e2) => if (b1) e2 else B(b1)
       case Binary(Or, B(b1), e2) => if (b1) B(b1) else e2
 
-      case If(B(b1), e2, e3) => if (b1) e2 else e3
+      case If(v1, v2, v3) if isValue(v1) => v1 match {
+        case B(b1) => if (b1) v2 else v3
+      }
 
       case Decl(mode, x, e1, e2) if !isRedex(mode, e1) => substitute(e2, e1, x)
         /***** More cases here */
@@ -374,7 +373,7 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
             val pazip = params zip args
             if (pazip.forall{ case ((s, MTyp(m, t)), e) => !isRedex(m, e) }) {
               val e1p = pazip.foldRight(e1) {
-                case (((s,mtyp), e), ebody) => substitute(ebody, e, s)
+                case (((s,_), e), ebody) => substitute(ebody, e, s)
               }
               p match {
                 case None => e1p
@@ -431,10 +430,10 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
       case _ => throw StuckError(e)
     }
   }
-  
-  
+
+
   /* External Interfaces */
-  
+
   //this.debug = true // uncomment this if you want to print debugging information
   this.keepGoing = true // comment this out if you want to stop at first exception when processing a file
 }
